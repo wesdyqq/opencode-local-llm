@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# llama-watch — live monitor for llama.cpp
+set -u
+
+UP_PORT=${LLAMA_UP_PORT:-8081}
+VRAM_PATH=${LLAMA_VRAM_PATH:-/sys/class/drm/card0/device/mem_info_vram_used}
+GTT_PATH=${LLAMA_GTT_PATH:-/sys/class/drm/card0/device/mem_info_gtt_used}
+LOG=${LLAMA_LOG:-/tmp/llama-proxy.log}
+
+fmt_mb() { awk -v b="$1" 'BEGIN{printf "%.0f MB", b/1024/1024}'; }
+
+while true; do
+  clear
+  echo "═══════════════════════════════════════════════════"
+  echo "  llama.cpp live monitor      $(date +%H:%M:%S)"
+  echo "═══════════════════════════════════════════════════"
+
+  PID=$(pgrep -x llama-server | head -1)
+  if [ -z "$PID" ]; then
+    echo "  STATE:    😴 idle (model unloaded)"
+    if pgrep -f llama-proxy.py > /dev/null; then
+      echo "  proxy:    🟢 listening :${LLAMA_PORT:-8080}"
+    else
+      echo "  proxy:    🔴 not running"
+    fi
+  else
+    echo "  STATE:    🔥 RUNNING (pid $PID)"
+    echo "  uptime:   $(ps -o etime= -p "$PID" | tr -d ' ')"
+    echo "  cpu:      $(ps -o %cpu= -p "$PID" | tr -d ' ')%"
+    echo "  rss:      $(fmt_mb $(( $(ps -o rss= -p "$PID" | tr -d ' ') * 1024 )))"
+
+    curl -s --max-time 1 "http://127.0.0.1:${UP_PORT}/slots" 2>/dev/null | python3 -c "
+import json,sys
+try: d=json.load(sys.stdin)
+except Exception: sys.exit()
+for s in d:
+    state = '🟢 generating' if s.get('is_processing') else '⚪ waiting'
+    print(f\"  task:     {s.get('id_task')}  {state}\")
+    print(f\"  prompt:   {s.get('n_prompt_tokens')} tok\")
+    print(f\"  done:     {s.get('n_prompt_tokens_processed')} tok\")
+" 2>/dev/null
+
+    SPEED=$(grep -oE '[0-9.]+ tokens per second' "$LOG" 2>/dev/null | tail -1)
+    [ -n "$SPEED" ] && echo "  speed:    $SPEED"
+  fi
+
+  echo
+  echo "── memory ────────────────────────────────────────"
+  [ -r "$VRAM_PATH" ] && echo "  VRAM:     $(fmt_mb "$(cat "$VRAM_PATH")")"
+  [ -r "$GTT_PATH" ] && echo "  GTT:      $(fmt_mb "$(cat "$GTT_PATH")")"
+  free -h | awk 'NR==2{printf "  RAM:      %s used / %s total\n", $3, $2}'
+  echo
+  echo "  (Ctrl+C to exit, refreshes every 2s)"
+  sleep 2
+done

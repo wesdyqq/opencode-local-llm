@@ -1,0 +1,22 @@
+[Unit]
+Description=llama.cpp proxy (on-demand start, idle shutdown)
+After=network.target
+
+[Service]
+Type=simple
+# Adjust these for your setup:
+Environment="LLAMA_MODEL=%h/Models/model.gguf"
+Environment="LLAMA_IDLE=30"
+Environment="LLAMA_NGL=99"
+Environment="LLAMA_CTX=8192"
+Environment="LLAMA_THREADS=6"
+Environment="LLAMA_LOG=%t/llama-proxy.log"
+
+ExecStart=/usr/bin/python3 %h/.local/bin/llama-proxy.py
+Restart=on-failure
+RestartSec=3
+Nice=10
+KillMode=control-group
+
+[Install]
+WantedBy=default.target
