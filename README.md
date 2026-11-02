@@ -67,6 +67,7 @@ The proxy listens on `127.0.0.1:8080` and serves an OpenAI-compatible API at
 | `LLAMA_THREADS` | `6` | CPU threads |
 | `LLAMA_EXTRA` | — | extra `llama-server` flags, space separated |
 | `LLAMA_LOG` | `/tmp/llama-proxy.log` | server log file |
+| `LLAMA_TOOL_SHIM` | `1` | `0` disables tool-call rewriting |
 
 ## systemd (user service)
 
@@ -101,6 +102,38 @@ llama-watch
 
 Shows whether the server runs, the current task, token counts, speed, and
 RAM/VRAM usage. Refreshes every 2 seconds.
+
+## Tool-call shim
+
+Some fine-tuned builds (abliterated / "uncensored" merges in particular) lose
+the ability to emit the `<tool_call>` envelope that `llama.cpp` parses. The
+weights still produce the correct JSON body, but wrap it in the wrong tag — or
+in a Markdown fence — so the server reports `tool_calls: null` and agents that
+depend on tools stop working. Forcing `tool_choice`, injecting few-shot
+examples, or supplying a correct chat template does **not** fix it: the
+behaviour is baked into the weights.
+
+The proxy repairs this at the protocol level. It recognises a call-shaped
+payload and rewrites the response into a real OpenAI `tool_calls` block with
+`finish_reason: "tool_calls"`:
+
+| Model output | Detected |
+|---|---|
+| ` ```json {"name":…,"arguments":…} ``` ` | ✅ |
+| `<tool_call>{…}</tool_call>` | ✅ |
+| `<tool_response>{…}</tool_response>` | ✅ |
+| `<function-call>{…}</function-call>` | ✅ |
+| bare `{"name":…,"arguments":…}` | ✅ |
+| JSON embedded in prose | ✅ |
+
+Both streaming and non-streaming responses are handled. Streaming works in one
+of two modes: while the start of the output is still ambiguous the proxy holds
+back up to ~24 bytes; as soon as it is clear the answer is plain text it
+flushes and streams normally. When a call is detected, the buffered payload is
+emitted as a single `tool_calls` delta.
+
+Set `LLAMA_TOOL_SHIM=0` to disable the rewrite and pass responses through
+untouched (useful when the model already emits proper calls).
 
 ## How idle detection works
 
