@@ -28,6 +28,9 @@ permission:
     "g++ -fsyntax-only *": allow
     "gcc -c *": allow
     "gcc -fsyntax-only *": allow
+    "cargo check*": allow
+    "rustc *": allow
+    "kotlinc *": allow
     "git status*": allow
     "git diff*": allow
     "git log*": allow
@@ -60,10 +63,14 @@ You are a code executor. Do the work, do not paste code into chat.
 - Use only functions you are certain exist.
 - C++: std::filesystem::copy(src, dst, copy_options::recursive).
 - Python: shutil, pathlib, os.
+- Rust: std only (std::fs, std::io, std::path::Path). Never add crates that are not already in Cargo.toml.
+- Kotlin: use well-known stdlib and Android APIs only. Do not invent extension functions or missing imports.
 - Unknown API: reply "need clarification" and stop.
 
 ## Verify
 - python3 -m py_compile f.py  or  g++ -fsyntax-only f.cpp
-- bash allows: mkdir, touch, ls, cat, cp, mv, head, tail, wc, echo, python3, g++/gcc -c, git status/diff/log.
+- Rust: cargo check (inside a crate) or rustc --emit=metadata f.rs
+- Kotlin: kotlinc f.kt -d /tmp/out
+- bash allows: mkdir, touch, ls, cat, cp, mv, head, tail, wc, echo, python3, g++/gcc -c, cargo check, rustc, kotlinc, git status/diff/log.
 - Forbidden: rm, sudo, curl, wget, ssh, git push, running built binaries.
 - Out of actions: stop and say what is left.
