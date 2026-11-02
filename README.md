@@ -114,6 +114,7 @@ the server keeps reporting `is_processing: true` the whole time.
 
 ## Notes
 
+- Tested with OpenCode 2.2.5 and `llama.cpp` 0.6.0 (`ggml` 0.26.0) on Arch Linux.
 - The proxy talks to the OpenAI-compatible endpoint. `reasoning_content` is
   the field `llama.cpp` uses for chain-of-thought tokens; it is mapped via the
   `compatibility.reasoningField` model option in OpenCode.
